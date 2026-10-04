@@ -118,6 +118,7 @@
       <div class="card p-6 max-w-3xl mx-auto">
         <h2 class="text-xl font-bold mb-5">New Job Card</h2>
         <form id="newjob-form" class="grid md:grid-cols-2 gap-4">
+          <div><label class="lbl">Job card # (empty = auto)</label><input id="nj-jobno" class="input" placeholder="e.g. EE-1042"></div>
           <div><label class="lbl">Customer name *</label><input id="nj-customer" class="input" required></div>
           <div><label class="lbl">Phone *</label><input id="nj-phone" class="input" required inputmode="tel" placeholder="03xx-xxxxxxx"></div>
           <div><label class="lbl">Phone 2 (optional)</label><input id="nj-phone2" class="input" inputmode="tel"></div>
@@ -424,6 +425,7 @@ $('newjob-form').addEventListener('submit', async e => {
   e.preventDefault();
   const btn = $('nj-submit'); btn.disabled = true; btn.textContent = 'Creating...';
   const job = {
+    JobNo: $('nj-jobno').value.trim(),
     CustomerName: $('nj-customer').value.trim(), Phone: $('nj-phone').value.trim(),
     Phone2: $('nj-phone2').value.trim(), CNIC: $('nj-cnic').value.trim(),
     DeviceType: $('nj-devicetype').value, BrandModel: $('nj-brand').value.trim(),

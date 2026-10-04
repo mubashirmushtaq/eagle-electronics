@@ -199,7 +199,22 @@ function handleCreateJob(b) {
   const prefix = String(getSetting('JobPrefix', 'EE-'));
   let next = parseInt(getSetting('NextJobNo', '1001'), 10);
   if (isNaN(next)) next = 1001;
-  const jobNo = prefix + next;
+
+  // Job number: manual entry allowed (the shop's paper cards are keyed on it).
+  // Empty = auto-generate. Duplicates are rejected.
+  let jobNo = String(j.JobNo || '').trim();
+  if (jobNo) {
+    if (findRow(sh, 'JobNo', jobNo) !== -1) return fail('Job number already exists: ' + jobNo);
+    // Keep the auto counter ahead of manual numbers (e.g. manual EE-1042 -> next auto is EE-1043)
+    const m = jobNo.match(/(\d+)\s*$/);
+    if (m && jobNo.indexOf(prefix) === 0) {
+      const n = parseInt(m[1], 10);
+      if (!isNaN(n) && n >= next) { next = n + 1; setSettingRaw('NextJobNo', String(next)); }
+    }
+  } else {
+    jobNo = prefix + next;
+    setSettingRaw('NextJobNo', String(next + 1));
+  }
 
   const row = JOBCARD_HEADERS.map(h => {
     switch (h) {
@@ -214,7 +229,6 @@ function handleCreateJob(b) {
     }
   });
   sh.appendRow(row);
-  setSettingRaw('NextJobNo', String(next + 1));
 
   // Log the advance as a payment so revenue reports stay consistent
   if (num(j.Advance) > 0) {
