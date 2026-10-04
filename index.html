@@ -1,0 +1,840 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Eagle Electronics - Repair Shop Manager</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  body { font-family: 'Inter', sans-serif; background: #f1f5f9; }
+  .spinner { border-top-color: #f59e0b; animation: spin 1s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .card { background: #fff; border-radius: .75rem; border: 1px solid #e2e8f0; box-shadow: 0 1px 2px rgb(0 0 0 / .05); }
+  .nav-btn { padding: .5rem .9rem; border-radius: .5rem; font-weight: 600; font-size: .875rem; color: #475569; white-space: nowrap; }
+  .nav-btn:hover { background: #f1f5f9; }
+  .nav-btn.active { background: #1e293b; color: #fff; }
+  .status-badge { font-size: .72rem; font-weight: 700; padding: .15rem .6rem; border-radius: 9999px; }
+  .st-Received { background: #dbeafe; color: #1d4ed8; }
+  .st-InRepair { background: #fef3c7; color: #b45309; }
+  .st-Ready { background: #d1fae5; color: #047857; }
+  .st-Delivered { background: #e2e8f0; color: #475569; }
+  .st-Cancelled { background: #fee2e2; color: #b91c1c; }
+  .chip { font-size: .78rem; font-weight: 600; padding: .35rem .8rem; border-radius: 9999px; border: 1px solid #e2e8f0; background: #fff; color: #475569; cursor: pointer; }
+  .chip.active { background: #1e293b; color: #fff; border-color: #1e293b; }
+  .input { width: 100%; background: #fff; border: 1px solid #cbd5e1; border-radius: .5rem; padding: .5rem .75rem; font-size: .875rem; color: #1e293b; }
+  .input:focus { outline: none; border-color: #f59e0b; box-shadow: 0 0 0 2px rgb(245 158 11 / .2); }
+  label.lbl { display: block; font-size: .75rem; font-weight: 600; color: #64748b; margin-bottom: .25rem; text-transform: uppercase; letter-spacing: .03em; }
+  .btn-primary { background: #f59e0b; color: #1e293b; font-weight: 700; padding: .6rem 1.2rem; border-radius: .5rem; }
+  .btn-primary:hover { background: #d97706; color: #fff; }
+  .btn-dark { background: #1e293b; color: #fff; font-weight: 600; padding: .5rem 1rem; border-radius: .5rem; font-size: .85rem; }
+  .btn-dark:hover { background: #0f172a; }
+  .btn-ghost { background: #f1f5f9; color: #475569; font-weight: 600; padding: .5rem 1rem; border-radius: .5rem; font-size: .85rem; }
+  .btn-ghost:hover { background: #e2e8f0; }
+  .btn-danger { background: #fee2e2; color: #b91c1c; font-weight: 600; padding: .5rem 1rem; border-radius: .5rem; font-size: .85rem; }
+  .btn-danger:hover { background: #fecaca; }
+  .btn-primary:disabled, .btn-dark:disabled { opacity: .5; cursor: not-allowed; }
+  #print-area { display: none; }
+  @media print {
+    body > *:not(#print-area) { display: none !important; }
+    #print-area { display: block !important; }
+    @page { margin: 0.4in; }
+  }
+</style>
+</head>
+<body class="text-slate-800">
+
+<!-- ============ LOGIN ============ -->
+<div id="login-section" class="flex items-center justify-center min-h-screen px-4">
+  <div class="card p-8 w-full max-w-sm">
+    <div class="text-center mb-6">
+      <h1 class="text-3xl font-extrabold tracking-tight">Eagle <span class="text-amber-500">Electronics</span></h1>
+      <p class="text-sm text-slate-500 mt-1">Repair Shop Manager</p>
+    </div>
+    <form id="login-form" class="space-y-4">
+      <div><label class="lbl" for="username">Username</label><input id="username" class="input" autocomplete="username"></div>
+      <div><label class="lbl" for="password">Password</label><input id="password" type="password" class="input" autocomplete="current-password"></div>
+      <button id="login-button" class="btn-primary w-full flex items-center justify-center gap-2">
+        <span id="login-spinner" class="spinner w-5 h-5 rounded-full border-2 border-slate-800 hidden"></span> Login
+      </button>
+    </form>
+  </div>
+</div>
+
+<div id="loading-indicator" class="hidden flex-col items-center justify-center min-h-screen gap-4">
+  <div class="spinner w-14 h-14 rounded-full border-4 border-slate-200"></div>
+  <p class="text-slate-500 text-sm">Loading shop data...</p>
+</div>
+
+<!-- ============ APP ============ -->
+<div id="app-container" class="hidden min-h-screen">
+  <header class="bg-slate-900 text-white sticky top-0 z-40 shadow">
+    <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+      <div>
+        <h1 id="store-name" class="text-lg font-extrabold tracking-tight">Eagle <span class="text-amber-400">Electronics</span></h1>
+        <p class="text-xs text-slate-400">Repair Shop Manager · <span id="user-display"></span></p>
+      </div>
+      <nav class="flex gap-1 overflow-x-auto">
+        <button class="nav-btn active" data-view="view-dashboard" style="color:#e2e8f0">Dashboard</button>
+        <button class="nav-btn" data-view="view-newjob" style="color:#e2e8f0">New Job</button>
+        <button class="nav-btn" data-view="view-jobs" style="color:#e2e8f0">Job Cards</button>
+        <button class="nav-btn" data-view="view-reports" style="color:#e2e8f0">Reports</button>
+        <button class="nav-btn" data-view="view-settings" style="color:#e2e8f0">Settings</button>
+      </nav>
+      <div class="flex gap-2">
+        <button id="refresh-data-button" class="btn-ghost !bg-slate-800 !text-slate-200 text-xs" title="Refresh data">⟳ Refresh</button>
+        <button id="logout-button" class="text-xs font-semibold text-slate-400 hover:text-white px-2">Logout</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-7xl mx-auto p-4 md:p-6">
+
+    <!-- ===== DASHBOARD ===== -->
+    <section id="view-dashboard">
+      <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-6">
+        <div class="card p-4"><p class="text-xs font-semibold text-slate-500 uppercase">Received today</p><p id="stat-received" class="text-2xl font-extrabold mt-1">0</p></div>
+        <div class="card p-4"><p class="text-xs font-semibold text-slate-500 uppercase">In repair</p><p id="stat-inrepair" class="text-2xl font-extrabold mt-1 text-amber-600">0</p></div>
+        <div class="card p-4"><p class="text-xs font-semibold text-slate-500 uppercase">Ready pickup</p><p id="stat-ready" class="text-2xl font-extrabold mt-1 text-emerald-600">0</p></div>
+        <div class="card p-4"><p class="text-xs font-semibold text-slate-500 uppercase">Delivered (mo)</p><p id="stat-delivered" class="text-2xl font-extrabold mt-1">0</p></div>
+        <div class="card p-4"><p class="text-xs font-semibold text-slate-500 uppercase">Revenue (mo)</p><p id="stat-revenue" class="text-2xl font-extrabold mt-1">Rs 0</p></div>
+        <div class="card p-4"><p class="text-xs font-semibold text-slate-500 uppercase">Outstanding</p><p id="stat-outstanding" class="text-2xl font-extrabold mt-1 text-red-600">Rs 0</p></div>
+      </div>
+      <div class="grid md:grid-cols-2 gap-4">
+        <div class="card p-5">
+          <h2 class="font-bold mb-3">Ready for pickup</h2>
+          <div id="ready-list" class="space-y-2 max-h-96 overflow-y-auto"><p class="text-sm text-slate-400">Nothing waiting.</p></div>
+        </div>
+        <div class="card p-5">
+          <h2 class="font-bold mb-3">Recent job cards</h2>
+          <div id="recent-list" class="space-y-2 max-h-96 overflow-y-auto"><p class="text-sm text-slate-400">No jobs yet.</p></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== NEW JOB ===== -->
+    <section id="view-newjob" class="hidden">
+      <div class="card p-6 max-w-3xl mx-auto">
+        <h2 class="text-xl font-bold mb-5">New Job Card</h2>
+        <form id="newjob-form" class="grid md:grid-cols-2 gap-4">
+          <div><label class="lbl">Customer name *</label><input id="nj-customer" class="input" required></div>
+          <div><label class="lbl">Phone *</label><input id="nj-phone" class="input" required inputmode="tel" placeholder="03xx-xxxxxxx"></div>
+          <div><label class="lbl">Phone 2 (optional)</label><input id="nj-phone2" class="input" inputmode="tel"></div>
+          <div><label class="lbl">CNIC (optional)</label><input id="nj-cnic" class="input" inputmode="numeric"></div>
+          <div><label class="lbl">Device type *</label>
+            <select id="nj-devicetype" class="input">
+              <option>UPS</option><option>Microwave Oven</option><option>Stabilizer</option>
+              <option>LCD</option><option>LED TV</option><option>Electro Medical Equipment</option><option>Other</option>
+            </select>
+          </div>
+          <div><label class="lbl">Brand / Model</label><input id="nj-brand" class="input" placeholder="e.g. Homage 1000VA"></div>
+          <div><label class="lbl">Serial no.</label><input id="nj-serial" class="input"></div>
+          <div><label class="lbl">Technician</label><input id="nj-tech" class="input"></div>
+          <div class="md:col-span-2"><label class="lbl">Fault / problem *</label><textarea id="nj-fault" class="input" rows="2" required placeholder="Describe the fault..."></textarea></div>
+          <div class="md:col-span-2"><label class="lbl">Accessories received</label><input id="nj-accessories" class="input" placeholder="e.g. remote, power cable, battery"></div>
+          <div><label class="lbl">Estimated charges (Rs)</label><input id="nj-est" type="number" min="0" class="input" value="0"></div>
+          <div><label class="lbl">Advance received (Rs)</label><input id="nj-advance" type="number" min="0" class="input" value="0"></div>
+          <div><label class="lbl">Expected delivery</label><input id="nj-expected" type="date" class="input"></div>
+          <div><label class="lbl">Notes</label><input id="nj-notes" class="input"></div>
+          <div class="md:col-span-2 flex gap-3 mt-2">
+            <button type="submit" id="nj-submit" class="btn-primary">Create job card</button>
+            <button type="reset" class="btn-ghost">Clear</button>
+          </div>
+        </form>
+        <div id="nj-success" class="hidden mt-6 p-4 bg-emerald-50 border border-emerald-200 rounded-lg">
+          <p class="font-bold text-emerald-700">Job card <span id="nj-success-no"></span> created.</p>
+          <div class="flex gap-2 mt-3">
+            <button id="nj-print" class="btn-dark">Print job card</button>
+            <button id="nj-another" class="btn-ghost">Create another</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== JOB CARDS ===== -->
+    <section id="view-jobs" class="hidden">
+      <div class="card p-5">
+        <div class="flex flex-wrap gap-3 items-center mb-4">
+          <input id="job-search" class="input !w-64" placeholder="Search: phone, card #, name, device...">
+          <div class="flex gap-2 flex-wrap" id="status-chips">
+            <button class="chip active" data-status="">All</button>
+            <button class="chip" data-status="Received">Received</button>
+            <button class="chip" data-status="In Repair">In Repair</button>
+            <button class="chip" data-status="Ready">Ready</button>
+            <button class="chip" data-status="Delivered">Delivered</button>
+            <button class="chip" data-status="Cancelled">Cancelled</button>
+          </div>
+          <div class="flex gap-2 items-center ml-auto text-sm">
+            <input id="jobs-from" type="date" class="input !w-auto"> <span class="text-slate-400">to</span>
+            <input id="jobs-to" type="date" class="input !w-auto">
+          </div>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead><tr class="text-left text-xs uppercase text-slate-500 border-b">
+              <th class="py-2 pr-3">Job #</th><th class="py-2 pr-3">Date</th><th class="py-2 pr-3">Customer</th>
+              <th class="py-2 pr-3">Phone</th><th class="py-2 pr-3">Device</th><th class="py-2 pr-3">Status</th>
+              <th class="py-2 pr-3 text-right">Balance</th>
+            </tr></thead>
+            <tbody id="jobs-tbody"></tbody>
+          </table>
+        </div>
+        <p id="jobs-count" class="text-xs text-slate-400 mt-3"></p>
+      </div>
+    </section>
+
+    <!-- ===== REPORTS ===== -->
+    <section id="view-reports" class="hidden">
+      <div class="card p-5">
+        <div class="flex flex-wrap gap-3 items-center mb-4">
+          <input id="rep-from" type="date" class="input !w-auto"><span class="text-slate-400 text-sm">to</span>
+          <input id="rep-to" type="date" class="input !w-auto">
+          <select id="rep-status" class="input !w-auto"><option value="">All statuses</option><option>Received</option><option>In Repair</option><option>Ready</option><option>Delivered</option><option>Cancelled</option></select>
+          <button id="rep-run" class="btn-dark">Run</button>
+          <button id="rep-export" class="btn-ghost">Export Excel</button>
+        </div>
+        <div id="rep-summary" class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4"></div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead><tr class="text-left text-xs uppercase text-slate-500 border-b">
+              <th class="py-2 pr-3">Job #</th><th class="py-2 pr-3">Date</th><th class="py-2 pr-3">Customer</th>
+              <th class="py-2 pr-3">Phone</th><th class="py-2 pr-3">Device</th><th class="py-2 pr-3">Status</th>
+              <th class="py-2 pr-3 text-right">Est.</th><th class="py-2 pr-3 text-right">Advance</th>
+              <th class="py-2 pr-3 text-right">At delivery</th><th class="py-2 pr-3 text-right">Balance</th>
+            </tr></thead>
+            <tbody id="rep-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== SETTINGS ===== -->
+    <section id="view-settings" class="hidden">
+      <div class="grid md:grid-cols-2 gap-4">
+        <div class="card p-6">
+          <h2 class="font-bold mb-4">Shop settings</h2>
+          <div class="space-y-3">
+            <div><label class="lbl">Shop name</label><input id="set-shopname" class="input"></div>
+            <div><label class="lbl">Address</label><input id="set-address" class="input"></div>
+            <div class="grid grid-cols-2 gap-3">
+              <div><label class="lbl">Phone 1</label><input id="set-phone1" class="input"></div>
+              <div><label class="lbl">Phone 2</label><input id="set-phone2" class="input"></div>
+            </div>
+            <div><label class="lbl">Services line (printed on card)</label><input id="set-services" class="input"></div>
+            <div class="grid grid-cols-2 gap-3">
+              <div><label class="lbl">Currency</label><input id="set-currency" class="input"></div>
+              <div><label class="lbl">Job # prefix</label><input id="set-jobprefix" class="input"></div>
+            </div>
+            <button id="set-save" class="btn-primary">Save settings</button>
+            <p id="set-note" class="text-xs text-slate-400">Only admins can change settings. Next job # is managed automatically.</p>
+          </div>
+        </div>
+        <div class="card p-6">
+          <h2 class="font-bold mb-4">Users</h2>
+          <div id="users-list" class="space-y-2 mb-4"></div>
+          <div id="adduser-form" class="border-t pt-4 grid grid-cols-2 gap-3">
+            <input id="nu-username" class="input" placeholder="Username">
+            <input id="nu-password" class="input" placeholder="Password">
+            <input id="nu-name" class="input" placeholder="Full name">
+            <select id="nu-role" class="input"><option value="staff">Staff</option><option value="admin">Admin</option></select>
+            <button id="nu-add" class="btn-dark col-span-2">Add user</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ============ JOB DETAIL MODAL ============ -->
+<div id="job-modal" class="fixed inset-0 bg-black/60 hidden items-center justify-center p-4 z-50">
+  <div class="bg-white rounded-xl w-full max-w-3xl max-h-[92vh] overflow-y-auto">
+    <div class="sticky top-0 bg-white border-b p-4 flex justify-between items-center">
+      <h2 class="text-lg font-bold">Job <span id="jm-jobno"></span> <span id="jm-status"></span></h2>
+      <button id="jm-close" class="btn-ghost !py-1">✕ Close</button>
+    </div>
+    <div id="jm-body" class="p-5"></div>
+  </div>
+</div>
+
+<!-- ============ DELIVERY MODAL ============ -->
+<div id="deliver-modal" class="fixed inset-0 bg-black/60 hidden items-center justify-center p-4 z-50">
+  <div class="bg-white rounded-xl w-full max-w-md p-6">
+    <h2 class="text-lg font-bold mb-1">Deliver job <span id="dl-jobno"></span></h2>
+    <p class="text-sm text-slate-500 mb-4">Balance due: <span id="dl-balance" class="font-bold text-slate-800"></span></p>
+    <label class="lbl">How is the device being collected?</label>
+    <div class="space-y-2 mb-4">
+      <label class="flex items-center gap-2 p-3 border rounded-lg cursor-pointer hover:bg-slate-50">
+        <input type="radio" name="proof" value="card" checked class="accent-amber-500">
+        <span class="text-sm font-medium">Customer returned the job card</span>
+      </label>
+      <label class="flex items-center gap-2 p-3 border rounded-lg cursor-pointer hover:bg-slate-50">
+        <input type="radio" name="proof" value="cnic" class="accent-amber-500">
+        <span class="text-sm font-medium">Card lost — take CNIC proof</span>
+      </label>
+    </div>
+    <div id="cnic-fields" class="hidden space-y-3 mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+      <div><label class="lbl">CNIC number</label><input id="dl-cnic-number" class="input" inputmode="numeric" placeholder="35202-xxxxxxx-x"></div>
+      <div><label class="lbl">CNIC photo (take a picture)</label><input id="dl-cnic-photo" type="file" accept="image/*" capture="environment" class="input"></div>
+      <p class="text-xs text-amber-700">CNIC number or photo is required when the card is not returned.</p>
+    </div>
+    <div class="mb-4"><label class="lbl">Amount collected now (Rs)</label><input id="dl-final-amount" type="number" min="0" class="input" value="0"></div>
+    <div class="flex gap-2 justify-end">
+      <button id="dl-cancel" class="btn-ghost">Cancel</button>
+      <button id="dl-confirm" class="btn-primary">Confirm delivery</button>
+    </div>
+  </div>
+</div>
+
+<!-- toast -->
+<div id="toast" class="fixed bottom-5 right-5 text-white py-2 px-4 rounded-lg shadow-lg transition-all duration-300 opacity-0 translate-y-2 z-[60]">
+  <p id="toast-message"></p>
+</div>
+
+<!-- print area -->
+<div id="print-area"></div>
+
+<script>
+/* ================= CONFIG ================= */
+// TODO: paste your Apps Script Web App /exec URL here after deploying Code.gs
+const API_URL = "https://script.google.com/macros/s/AKfycbxjYaGkknAnMrX18NcR34as7TGySZI1c8fn1s5BEXZo36CHpiV6ts4gWrFDQKF61FfS/exec";
+
+/* ================= STATE ================= */
+let jobCards = [], payments = [], users = [], settings = {};
+let currentUser = null;
+let currentFilter = { q: '', status: '', from: '', to: '' };
+let lastCreatedJobNo = null;
+
+/* ================= HELPERS ================= */
+const $ = id => document.getElementById(id);
+const cur = () => settings.Currency || 'Rs ';
+const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function fmtDate(v) { if (!v) return '—'; const d = new Date(v); return isNaN(d) ? String(v) : d.toLocaleDateString('en-PK', { day: '2-digit', month: 'short', year: 'numeric' }); }
+function fmtDT(v) { if (!v) return '—'; const d = new Date(v); return isNaN(d) ? String(v) : d.toLocaleString('en-PK', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }); }
+function fmtMoney(v) { const n = parseFloat(v) || 0; return cur() + n.toLocaleString('en-PK'); }
+function dayStr(v) { const d = new Date(v); return isNaN(d) ? '' : d.toISOString().slice(0, 10); }
+function todayStr() { return new Date().toISOString().slice(0, 10); }
+function monthStr() { return new Date().toISOString().slice(0, 7); }
+function statusBadge(s) { return `<span class="status-badge st-${esc(s).replace(' ', '')}">${esc(s)}</span>`; }
+
+function showToast(msg, type = 'success') {
+  const t = $('toast'); $('toast-message').textContent = msg;
+  t.className = 'fixed bottom-5 right-5 text-white py-2 px-4 rounded-lg shadow-lg transition-all duration-300 z-[60] ' + (type === 'error' ? 'bg-red-600' : 'bg-emerald-600');
+  setTimeout(() => t.classList.remove('opacity-0', 'translate-y-2'), 10);
+  setTimeout(() => t.classList.add('opacity-0', 'translate-y-2'), 3200);
+}
+
+async function apiGet(params) {
+  const r = await fetch(API_URL + '?' + new URLSearchParams(params));
+  return r.json();
+}
+async function apiPost(body) {
+  const r = await fetch(API_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(body) });
+  return r.json();
+}
+
+/* ================= LOGIN / LOAD ================= */
+$('login-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  $('login-button').disabled = true; $('login-spinner').classList.remove('hidden');
+  try {
+    const data = await apiPost({ action: 'login', username: $('username').value.trim(), password: $('password').value });
+    if (data.status !== 'success') throw new Error(data.message || 'Login failed');
+    currentUser = data.user;
+    $('login-section').classList.add('hidden');
+    $('loading-indicator').classList.remove('hidden'); $('loading-indicator').classList.add('flex');
+    await loadData();
+    $('loading-indicator').classList.add('hidden'); $('loading-indicator').classList.remove('flex');
+    $('app-container').classList.remove('hidden');
+    $('user-display').textContent = currentUser.name + ' (' + currentUser.role + ')';
+    showView('view-dashboard');
+  } catch (err) {
+    showToast(err.message, 'error');
+    $('login-button').disabled = false; $('login-spinner').classList.add('hidden');
+  }
+});
+
+$('logout-button').addEventListener('click', () => location.reload());
+
+async function loadData() {
+  const data = await apiGet({ action: 'load' });
+  if (data.error) throw new Error(data.error);
+  jobCards = data.jobCards || []; payments = data.payments || [];
+  users = data.users || []; settings = data.settings || {};
+  document.title = (settings.ShopName || 'Eagle Electronics') + ' - Repair Shop Manager';
+  $('store-name').innerHTML = esc(settings.ShopName || 'Eagle Electronics').replace('Electronics', '<span class="text-amber-400">Electronics</span>');
+  renderAll();
+}
+
+$('refresh-data-button').addEventListener('click', async () => {
+  try { await loadData(); showToast('Data refreshed'); }
+  catch (e) { showToast(e.message, 'error'); }
+});
+
+/* ================= NAV ================= */
+document.querySelectorAll('.nav-btn').forEach(b => b.addEventListener('click', () => showView(b.dataset.view)));
+function showView(id) {
+  document.querySelectorAll('.nav-btn').forEach(b => {
+    const on = b.dataset.view === id;
+    b.classList.toggle('active', on);
+    b.style.color = on ? '#fff' : '#e2e8f0';
+  });
+  ['view-dashboard', 'view-newjob', 'view-jobs', 'view-reports', 'view-settings'].forEach(v => $(v).classList.toggle('hidden', v !== id));
+  if (id === 'view-dashboard') renderDashboard();
+  if (id === 'view-jobs') renderJobs();
+  if (id === 'view-reports') runReport();
+  if (id === 'view-settings') renderSettings();
+}
+
+function renderAll() { renderDashboard(); renderJobs(); }
+
+/* ================= DASHBOARD ================= */
+function renderDashboard() {
+  const t = todayStr(), m = monthStr();
+  const active = jobCards.filter(j => j.Status !== 'Cancelled');
+  $('stat-received').textContent = jobCards.filter(j => dayStr(j.Date) === t).length;
+  $('stat-inrepair').textContent = active.filter(j => j.Status === 'In Repair').length;
+  $('stat-ready').textContent = active.filter(j => j.Status === 'Ready').length;
+  $('stat-delivered').textContent = jobCards.filter(j => j.Status === 'Delivered' && dayStr(j.DeliveredDate).startsWith(m)).length;
+  $('stat-revenue').textContent = fmtMoney(payments.filter(p => dayStr(p.Date).startsWith(m)).reduce((s, p) => s + (parseFloat(p.Amount) || 0), 0));
+  $('stat-outstanding').textContent = fmtMoney(active.filter(j => j.Status !== 'Delivered').reduce((s, j) => s + (parseFloat(j.Balance) || 0), 0));
+
+  const ready = active.filter(j => j.Status === 'Ready').sort((a, b) => new Date(a.ReadyDate) - new Date(b.ReadyDate));
+  $('ready-list').innerHTML = ready.length ? ready.map(j => `
+    <button onclick="openJob('${esc(j.JobNo)}')" class="w-full text-left p-3 bg-emerald-50 border border-emerald-200 rounded-lg hover:bg-emerald-100">
+      <div class="flex justify-between items-center"><span class="font-bold text-sm">${esc(j.JobNo)}</span><span class="text-xs text-slate-500">${fmtDate(j.ReadyDate)}</span></div>
+      <p class="text-sm">${esc(j.CustomerName)} · ${esc(j.Phone)}</p>
+      <p class="text-xs text-slate-500">${esc(j.DeviceType)} ${esc(j.BrandModel || '')}</p>
+    </button>`).join('') : '<p class="text-sm text-slate-400">Nothing waiting.</p>';
+
+  const recent = [...jobCards].sort((a, b) => new Date(b.Date) - new Date(a.Date)).slice(0, 8);
+  $('recent-list').innerHTML = recent.length ? recent.map(j => `
+    <button onclick="openJob('${esc(j.JobNo)}')" class="w-full text-left p-3 bg-slate-50 border rounded-lg hover:bg-slate-100">
+      <div class="flex justify-between items-center"><span class="font-bold text-sm">${esc(j.JobNo)}</span>${statusBadge(j.Status)}</div>
+      <p class="text-sm">${esc(j.CustomerName)} · ${esc(j.Phone)}</p>
+      <p class="text-xs text-slate-500">${esc(j.DeviceType)} · ${fmtDate(j.Date)}</p>
+    </button>`).join('') : '<p class="text-sm text-slate-400">No jobs yet.</p>';
+}
+</script>
+
+<script>
+/* ================= NEW JOB ================= */
+$('newjob-form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const btn = $('nj-submit'); btn.disabled = true; btn.textContent = 'Creating...';
+  const job = {
+    CustomerName: $('nj-customer').value.trim(), Phone: $('nj-phone').value.trim(),
+    Phone2: $('nj-phone2').value.trim(), CNIC: $('nj-cnic').value.trim(),
+    DeviceType: $('nj-devicetype').value, BrandModel: $('nj-brand').value.trim(),
+    SerialNo: $('nj-serial').value.trim(), Fault: $('nj-fault').value.trim(),
+    Accessories: $('nj-accessories').value.trim(),
+    EstCharges: parseFloat($('nj-est').value) || 0, Advance: parseFloat($('nj-advance').value) || 0,
+    Technician: $('nj-tech').value.trim(), ExpectedDate: $('nj-expected').value,
+    Notes: $('nj-notes').value.trim(), ReceivedBy: currentUser.username
+  };
+  try {
+    const data = await apiPost({ action: 'createJob', job });
+    if (data.status !== 'success') throw new Error(data.message);
+    lastCreatedJobNo = data.jobNo;
+    $('nj-success-no').textContent = data.jobNo;
+    $('nj-success').classList.remove('hidden');
+    $('newjob-form').reset();
+    await loadData();
+    showToast('Job card ' + data.jobNo + ' created');
+  } catch (err) { showToast(err.message, 'error'); }
+  btn.disabled = false; btn.textContent = 'Create job card';
+});
+$('nj-print').addEventListener('click', () => { if (lastCreatedJobNo) printJobCard(lastCreatedJobNo); });
+$('nj-another').addEventListener('click', () => { $('nj-success').classList.add('hidden'); $('nj-customer').focus(); });
+
+/* ================= JOB LIST ================= */
+$('job-search').addEventListener('input', e => { currentFilter.q = e.target.value.toLowerCase(); renderJobs(); });
+document.querySelectorAll('#status-chips .chip').forEach(c => c.addEventListener('click', () => {
+  document.querySelectorAll('#status-chips .chip').forEach(x => x.classList.remove('active'));
+  c.classList.add('active'); currentFilter.status = c.dataset.status; renderJobs();
+}));
+$('jobs-from').addEventListener('change', e => { currentFilter.from = e.target.value; renderJobs(); });
+$('jobs-to').addEventListener('change', e => { currentFilter.to = e.target.value; renderJobs(); });
+
+function filteredJobs() {
+  const { q, status, from, to } = currentFilter;
+  return jobCards.filter(j => {
+    if (status && j.Status !== status) return false;
+    const d = dayStr(j.Date);
+    if (from && d < from) return false;
+    if (to && d > to) return false;
+    if (q) {
+      const hay = [j.JobNo, j.CustomerName, j.Phone, j.Phone2, j.DeviceType, j.BrandModel, j.SerialNo].map(x => String(x || '').toLowerCase()).join(' ');
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  }).sort((a, b) => new Date(b.Date) - new Date(a.Date));
+}
+
+function renderJobs() {
+  const list = filteredJobs();
+  $('jobs-tbody').innerHTML = list.map(j => `
+    <tr class="border-b hover:bg-amber-50 cursor-pointer" onclick="openJob('${esc(j.JobNo)}')">
+      <td class="py-2 pr-3 font-bold">${esc(j.JobNo)}</td>
+      <td class="py-2 pr-3 text-slate-500">${fmtDate(j.Date)}</td>
+      <td class="py-2 pr-3">${esc(j.CustomerName)}</td>
+      <td class="py-2 pr-3">${esc(j.Phone)}</td>
+      <td class="py-2 pr-3">${esc(j.DeviceType)}${j.BrandModel ? ' · ' + esc(j.BrandModel) : ''}</td>
+      <td class="py-2 pr-3">${statusBadge(j.Status)}</td>
+      <td class="py-2 text-right font-semibold ${parseFloat(j.Balance) > 0 ? 'text-red-600' : ''}">${fmtMoney(j.Balance)}</td>
+    </tr>`).join('') || '<tr><td colspan="7" class="py-8 text-center text-slate-400">No job cards found.</td></tr>';
+  $('jobs-count').textContent = list.length + ' job card(s)';
+}
+
+/* ================= JOB DETAIL ================= */
+function getJob(jobNo) { return jobCards.find(j => String(j.JobNo) === String(jobNo)); }
+function getPayments(jobNo) { return payments.filter(p => String(p.JobNo) === String(jobNo)).sort((a, b) => new Date(a.Date) - new Date(b.Date)); }
+
+function openJob(jobNo) {
+  const j = getJob(jobNo); if (!j) return;
+  $('jm-jobno').textContent = j.JobNo;
+  $('jm-status').innerHTML = statusBadge(j.Status);
+  const pays = getPayments(jobNo);
+  const isAdmin = currentUser.role === 'admin';
+  const canEdit = j.Status !== 'Delivered' && j.Status !== 'Cancelled';
+
+  const actions = [];
+  if (j.Status === 'Received') actions.push(`<button class="btn-dark" onclick="setStatus('${esc(j.JobNo)}','In Repair')">Start repair</button>`);
+  if (j.Status === 'In Repair') actions.push(`<button class="btn-dark" onclick="setStatus('${esc(j.JobNo)}','Ready')">Mark ready</button>`);
+  if (j.Status === 'Ready') actions.push(`<button class="btn-primary" onclick="openDeliver('${esc(j.JobNo)}')">Deliver device</button>`);
+  if (canEdit) actions.push(`<button class="btn-danger" onclick="setStatus('${esc(j.JobNo)}','Cancelled')">Cancel job</button>`);
+
+  $('jm-body').innerHTML = `
+    <div class="grid md:grid-cols-2 gap-5">
+      <div>
+        <h3 class="font-bold text-sm uppercase text-slate-500 mb-2">Customer</h3>
+        <p class="font-semibold text-lg">${esc(j.CustomerName)}</p>
+        <p class="text-sm">📞 ${esc(j.Phone)}${j.Phone2 ? ' · ' + esc(j.Phone2) : ''}</p>
+        ${j.CNIC ? `<p class="text-sm text-slate-500">CNIC: ${esc(j.CNIC)}</p>` : ''}
+        <h3 class="font-bold text-sm uppercase text-slate-500 mt-4 mb-2">Device</h3>
+        <p class="font-semibold">${esc(j.DeviceType)}${j.BrandModel ? ' — ' + esc(j.BrandModel) : ''}</p>
+        ${j.SerialNo ? `<p class="text-sm text-slate-500">S/N: ${esc(j.SerialNo)}</p>` : ''}
+        ${j.Accessories ? `<p class="text-sm text-slate-500">Accessories: ${esc(j.Accessories)}</p>` : ''}
+        <h3 class="font-bold text-sm uppercase text-slate-500 mt-4 mb-2">Fault</h3>
+        <p class="text-sm bg-slate-50 border rounded-lg p-3">${esc(j.Fault) || '—'}</p>
+        ${j.Notes ? `<h3 class="font-bold text-sm uppercase text-slate-500 mt-4 mb-2">Notes</h3><p class="text-sm">${esc(j.Notes)}</p>` : ''}
+      </div>
+      <div>
+        <h3 class="font-bold text-sm uppercase text-slate-500 mb-2">Money</h3>
+        <div class="bg-slate-50 border rounded-lg p-3 text-sm space-y-1">
+          <div class="flex justify-between"><span>Estimated charges</span><b>${fmtMoney(j.EstCharges)}</b></div>
+          <div class="flex justify-between"><span>Advance paid</span><b>${fmtMoney(j.Advance)}</b></div>
+          <div class="flex justify-between"><span>Collected at delivery</span><b>${fmtMoney(j.AtDelivery)}</b></div>
+          <div class="flex justify-between text-base border-t pt-1"><span>Balance due</span><b class="${parseFloat(j.Balance) > 0 ? 'text-red-600' : 'text-emerald-600'}">${fmtMoney(j.Balance)}</b></div>
+        </div>
+        <h3 class="font-bold text-sm uppercase text-slate-500 mt-4 mb-2">Timeline</h3>
+        <div class="text-sm space-y-1">
+          <p>Received: <b>${fmtDT(j.Date)}</b> by ${esc(j.ReceivedBy || '—')}</p>
+          ${j.Technician ? `<p>Technician: <b>${esc(j.Technician)}</b></p>` : ''}
+          ${j.ExpectedDate ? `<p>Expected: <b>${fmtDate(j.ExpectedDate)}</b></p>` : ''}
+          ${j.ReadyDate ? `<p>Ready: <b>${fmtDT(j.ReadyDate)}</b></p>` : ''}
+          ${j.DeliveredDate ? `<p>Delivered: <b>${fmtDT(j.DeliveredDate)}</b> (${esc(j.DeliveryProof || '') === 'CNIC' ? 'CNIC proof' : 'card returned'})</p>` : ''}
+          ${j.CNICPhotoURL ? `<p><a href="${esc(j.CNICPhotoURL)}" target="_blank" class="text-amber-600 underline font-semibold">View CNIC photo</a></p>` : ''}
+        </div>
+        <h3 class="font-bold text-sm uppercase text-slate-500 mt-4 mb-2">Payments</h3>
+        <div class="space-y-1 text-sm max-h-40 overflow-y-auto">
+          ${pays.length ? pays.map(p => `<div class="flex justify-between bg-slate-50 border rounded px-2 py-1"><span>${fmtDate(p.Date)} · ${esc(p.Type)} · ${esc(p.ReceivedBy || '')}</span><b>${fmtMoney(p.Amount)}</b></div>`).join('') : '<p class="text-slate-400">No payments recorded.</p>'}
+        </div>
+        ${canEdit ? `
+        <div class="flex gap-2 mt-2">
+          <input id="jm-pay-amt" type="number" min="1" placeholder="Amount" class="input !w-32">
+          <select id="jm-pay-type" class="input !w-auto"><option>Advance</option><option>Other</option></select>
+          <button class="btn-dark" onclick="addPayment('${esc(j.JobNo)}')">Add</button>
+        </div>` : ''}
+      </div>
+    </div>
+    ${isAdmin && canEdit ? `<div class="mt-4"><button class="btn-ghost text-xs" onclick="toggleEditForm('${esc(j.JobNo)}')">✎ Edit job details</button><div id="jm-edit" class="hidden mt-3"></div></div>` : ''}
+    <div class="flex flex-wrap gap-2 mt-5 pt-4 border-t">
+      ${actions.join('')}
+      <button class="btn-ghost" onclick="printJobCard('${esc(j.JobNo)}')">🖨 Job card</button>
+      ${j.Status === 'Delivered' ? `<button class="btn-ghost" onclick="printReceipt('${esc(j.JobNo)}')">🖨 Receipt</button>` : ''}
+    </div>`;
+  $('job-modal').classList.remove('hidden'); $('job-modal').classList.add('flex');
+}
+$('jm-close').addEventListener('click', closeJobModal);
+function closeJobModal() { $('job-modal').classList.add('hidden'); $('job-modal').classList.remove('flex'); }
+$('job-modal').addEventListener('click', e => { if (e.target === $('job-modal')) closeJobModal(); });
+
+async function setStatus(jobNo, status) {
+  const label = { 'In Repair': 'start repair on', 'Ready': 'mark ready', 'Cancelled': 'cancel' }[status] || status;
+  if (status === 'Cancelled' && !confirm('Cancel job ' + jobNo + '?')) return;
+  try {
+    const data = await apiPost({ action: 'setStatus', jobNo, status });
+    if (data.status !== 'success') throw new Error(data.message);
+    await loadData(); openJob(jobNo); showToast('Job ' + jobNo + ' → ' + status);
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+async function addPayment(jobNo) {
+  const amt = parseFloat($('jm-pay-amt').value);
+  if (!amt || amt <= 0) { showToast('Enter a valid amount', 'error'); return; }
+  try {
+    const data = await apiPost({ action: 'addPayment', jobNo, amount: amt, type: $('jm-pay-type').value, receivedBy: currentUser.username });
+    if (data.status !== 'success') throw new Error(data.message);
+    await loadData(); openJob(jobNo); showToast('Payment of ' + fmtMoney(amt) + ' recorded');
+  } catch (e) { showToast(e.message, 'error'); }
+}
+
+function toggleEditForm(jobNo) {
+  const j = getJob(jobNo); const box = $('jm-edit');
+  if (!box.classList.contains('hidden')) { box.classList.add('hidden'); return; }
+  box.innerHTML = `
+    <div class="grid md:grid-cols-2 gap-3 bg-amber-50 border border-amber-200 rounded-lg p-4">
+      <div><label class="lbl">Customer</label><input id="je-customer" class="input" value="${esc(j.CustomerName)}"></div>
+      <div><label class="lbl">Phone</label><input id="je-phone" class="input" value="${esc(j.Phone)}"></div>
+      <div><label class="lbl">Phone 2</label><input id="je-phone2" class="input" value="${esc(j.Phone2 || '')}"></div>
+      <div><label class="lbl">CNIC</label><input id="je-cnic" class="input" value="${esc(j.CNIC || '')}"></div>
+      <div><label class="lbl">Device type</label><input id="je-device" class="input" value="${esc(j.DeviceType)}"></div>
+      <div><label class="lbl">Brand / Model</label><input id="je-brand" class="input" value="${esc(j.BrandModel || '')}"></div>
+      <div><label class="lbl">Serial</label><input id="je-serial" class="input" value="${esc(j.SerialNo || '')}"></div>
+      <div><label class="lbl">Technician</label><input id="je-tech" class="input" value="${esc(j.Technician || '')}"></div>
+      <div class="md:col-span-2"><label class="lbl">Fault</label><textarea id="je-fault" class="input" rows="2">${esc(j.Fault || '')}</textarea></div>
+      <div><label class="lbl">Est. charges</label><input id="je-est" type="number" class="input" value="${j.EstCharges || 0}"></div>
+      <div><label class="lbl">Expected date</label><input id="je-expected" type="date" class="input" value="${(j.ExpectedDate || '').slice(0, 10)}"></div>
+      <div class="md:col-span-2"><label class="lbl">Accessories</label><input id="je-acc" class="input" value="${esc(j.Accessories || '')}"></div>
+      <div class="md:col-span-2"><label class="lbl">Notes</label><input id="je-notes" class="input" value="${esc(j.Notes || '')}"></div>
+      <div class="md:col-span-2"><button class="btn-primary" onclick="saveEdit('${esc(j.JobNo)}')">Save changes</button></div>
+    </div>`;
+  box.classList.remove('hidden');
+}
+
+async function saveEdit(jobNo) {
+  const updates = {
+    CustomerName: $('je-customer').value.trim(), Phone: $('je-phone').value.trim(),
+    Phone2: $('je-phone2').value.trim(), CNIC: $('je-cnic').value.trim(),
+    DeviceType: $('je-device').value.trim(), BrandModel: $('je-brand').value.trim(),
+    SerialNo: $('je-serial').value.trim(), Technician: $('je-tech').value.trim(),
+    Fault: $('je-fault').value.trim(), EstCharges: parseFloat($('je-est').value) || 0,
+    ExpectedDate: $('je-expected').value, Accessories: $('je-acc').value.trim(), Notes: $('je-notes').value.trim()
+  };
+  try {
+    const data = await apiPost({ action: 'updateJob', jobNo, updates });
+    if (data.status !== 'success') throw new Error(data.message);
+    await loadData(); openJob(jobNo); showToast('Job updated');
+  } catch (e) { showToast(e.message, 'error'); }
+}
+</script>
+
+<script>
+/* ================= DELIVERY ================= */
+let deliverJobNo = null;
+function openDeliver(jobNo) {
+  const j = getJob(jobNo); if (!j) return;
+  deliverJobNo = jobNo;
+  $('dl-jobno').textContent = jobNo;
+  $('dl-balance').textContent = fmtMoney(j.Balance);
+  $('dl-final-amount').value = Math.max(0, parseFloat(j.Balance) || 0);
+  document.querySelector('input[name="proof"][value="card"]').checked = true;
+  $('cnic-fields').classList.add('hidden');
+  $('dl-cnic-number').value = ''; $('dl-cnic-photo').value = '';
+  closeJobModal();
+  $('deliver-modal').classList.remove('hidden'); $('deliver-modal').classList.add('flex');
+}
+document.querySelectorAll('input[name="proof"]').forEach(r => r.addEventListener('change', () => {
+  $('cnic-fields').classList.toggle('hidden', document.querySelector('input[name="proof"]:checked').value !== 'cnic');
+}));
+$('dl-cancel').addEventListener('click', () => { $('deliver-modal').classList.add('hidden'); $('deliver-modal').classList.remove('flex'); });
+
+function fileToBase64(file) {
+  return new Promise((res, rej) => {
+    const fr = new FileReader();
+    fr.onload = () => res(fr.result); fr.onerror = rej;
+    fr.readAsDataURL(file);
+  });
+}
+
+$('dl-confirm').addEventListener('click', async () => {
+  const proof = document.querySelector('input[name="proof"]:checked').value;
+  const btn = $('dl-confirm'); btn.disabled = true; btn.textContent = 'Processing...';
+  try {
+    let cnicNumber = '', cnicPhotoBase64 = '', cnicPhotoName = '';
+    if (proof === 'cnic') {
+      cnicNumber = $('dl-cnic-number').value.trim();
+      const f = $('dl-cnic-photo').files[0];
+      if (!cnicNumber && !f) throw new Error('Enter the CNIC number or take a CNIC photo');
+      if (f) { cnicPhotoBase64 = await fileToBase64(f); cnicPhotoName = f.name || 'cnic.jpg'; }
+    }
+    const data = await apiPost({
+      action: 'deliver', jobNo: deliverJobNo, proof,
+      cnicNumber, cnicPhotoBase64, cnicPhotoName,
+      finalAmount: parseFloat($('dl-final-amount').value) || 0,
+      receivedBy: currentUser.username
+    });
+    if (data.status !== 'success') throw new Error(data.message);
+    $('deliver-modal').classList.add('hidden'); $('deliver-modal').classList.remove('flex');
+    await loadData();
+    showToast('Job ' + deliverJobNo + ' delivered');
+    printReceipt(deliverJobNo);
+  } catch (e) { showToast(e.message, 'error'); }
+  btn.disabled = false; btn.textContent = 'Confirm delivery';
+});
+
+/* ================= PRINTING ================= */
+function shopHeader() {
+  return `
+    <div style="text-align:center;border-bottom:2px solid #000;padding-bottom:8px;margin-bottom:10px">
+      <h1 style="font-size:26px;margin:0;font-weight:800">${esc(settings.ShopName || 'Eagle Electronics')}</h1>
+      <p style="font-size:11px;margin:2px 0">${esc(settings.Services || 'Sale & Services of Electro Medical Equipments, UPS, Microwave Oven, Stabilizer & LCD, LED.')}</p>
+    </div>`;
+}
+function shopFooter() {
+  return `
+    <div style="margin-top:12px;border-top:1px dashed #000;padding-top:6px;font-size:11px;text-align:center">
+      <p style="margin:2px 0">📍 ${esc(settings.Address || '')}</p>
+      <p style="margin:2px 0">📞 ${esc(settings.Phone1 || '')}${settings.Phone2 ? ' · ' + esc(settings.Phone2) : ''}</p>
+    </div>`;
+}
+
+function printJobCard(jobNo) {
+  const j = getJob(jobNo); if (!j) return;
+  $('print-area').innerHTML = `
+    <div style="font-family:Inter,Arial,sans-serif;color:#000;max-width:420px;margin:0 auto;border:2px solid #000;padding:14px">
+      ${shopHeader()}
+      <table style="width:100%;font-size:13px;border-collapse:collapse">
+        <tr><td style="padding:3px 0"><b>Job Card #:</b> ${esc(j.JobNo)}</td><td style="text-align:right"><b>Date:</b> ${fmtDate(j.Date)}</td></tr>
+        <tr><td style="padding:3px 0" colspan="2"><b>Customer:</b> ${esc(j.CustomerName)}</td></tr>
+        <tr><td style="padding:3px 0" colspan="2"><b>Phone:</b> ${esc(j.Phone)}${j.Phone2 ? ' / ' + esc(j.Phone2) : ''}</td></tr>
+        <tr><td style="padding:3px 0" colspan="2"><b>Device:</b> ${esc(j.DeviceType)}${j.BrandModel ? ' — ' + esc(j.BrandModel) : ''}</td></tr>
+        ${j.SerialNo ? `<tr><td colspan="2" style="padding:3px 0"><b>Serial:</b> ${esc(j.SerialNo)}</td></tr>` : ''}
+        <tr><td colspan="2" style="padding:3px 0"><b>Fault:</b> ${esc(j.Fault || '—')}</td></tr>
+        ${j.Accessories ? `<tr><td colspan="2" style="padding:3px 0"><b>Accessories:</b> ${esc(j.Accessories)}</td></tr>` : ''}
+        <tr><td style="padding:3px 0"><b>Est. charges:</b> ${fmtMoney(j.EstCharges)}</td><td style="text-align:right"><b>Advance:</b> ${fmtMoney(j.Advance)}</td></tr>
+        ${j.ExpectedDate ? `<tr><td colspan="2" style="padding:3px 0"><b>Expected delivery:</b> ${fmtDate(j.ExpectedDate)}</td></tr>` : ''}
+      </table>
+      <p style="font-size:11px;margin-top:10px;border:1px dashed #000;padding:6px">⚠️ Please bring this card when collecting your device. If the card is lost, CNIC will be required at pickup.</p>
+      <div style="display:flex;justify-content:space-between;margin-top:24px;font-size:12px">
+        <span>Customer signature: __________</span><span>Received by: __________</span>
+      </div>
+      ${shopFooter()}
+    </div>`;
+  setTimeout(() => window.print(), 150);
+}
+
+function printReceipt(jobNo) {
+  const j = getJob(jobNo); if (!j) return;
+  const pays = getPayments(jobNo);
+  $('print-area').innerHTML = `
+    <div style="font-family:Inter,Arial,sans-serif;color:#000;max-width:340px;margin:0 auto;font-size:12px">
+      <div style="text-align:center;border-bottom:1px dashed #000;padding-bottom:6px;margin-bottom:8px">
+        <h2 style="font-size:18px;margin:0">${esc(settings.ShopName || 'Eagle Electronics')}</h2>
+        <p style="margin:2px 0">DELIVERY RECEIPT</p>
+        <p style="margin:2px 0">${fmtDT(j.DeliveredDate || new Date())}</p>
+      </div>
+      <p><b>Job #:</b> ${esc(j.JobNo)}</p>
+      <p><b>Customer:</b> ${esc(j.CustomerName)} (${esc(j.Phone)})</p>
+      <p><b>Device:</b> ${esc(j.DeviceType)}${j.BrandModel ? ' — ' + esc(j.BrandModel) : ''}</p>
+      <table style="width:100%;border-collapse:collapse;margin-top:8px">
+        ${pays.map(p => `<tr><td style="padding:2px 0">${fmtDate(p.Date)} · ${esc(p.Type)}</td><td style="text-align:right">${fmtMoney(p.Amount)}</td></tr>`).join('')}
+        <tr style="border-top:1px solid #000"><td style="padding:4px 0"><b>Total paid</b></td><td style="text-align:right"><b>${fmtMoney(pays.reduce((s, p) => s + (parseFloat(p.Amount) || 0), 0))}</b></td></tr>
+        <tr><td><b>Balance due</b></td><td style="text-align:right"><b>${fmtMoney(j.Balance)}</b></td></tr>
+      </table>
+      <p style="margin-top:8px"><b>Collection proof:</b> ${esc(j.DeliveryProof || '') === 'CNIC' ? 'CNIC verified' : 'Job card returned'}</p>
+      <p style="margin-top:16px">Customer signature: __________</p>
+      <p style="text-align:center;margin-top:10px;font-size:10px">Thank you for your business!</p>
+    </div>`;
+  setTimeout(() => window.print(), 150);
+}
+
+/* ================= REPORTS ================= */
+$('rep-run').addEventListener('click', runReport);
+function runReport() {
+  const from = $('rep-from').value, to = $('rep-to').value, st = $('rep-status').value;
+  const list = jobCards.filter(j => {
+    const d = dayStr(j.Date);
+    if (from && d < from) return false;
+    if (to && d > to) return false;
+    if (st && j.Status !== st) return false;
+    return true;
+  }).sort((a, b) => new Date(a.Date) - new Date(b.Date));
+  $('rep-tbody').innerHTML = list.map(j => `
+    <tr class="border-b hover:bg-slate-50 cursor-pointer" onclick="openJob('${esc(j.JobNo)}')">
+      <td class="py-2 pr-3 font-bold">${esc(j.JobNo)}</td><td class="py-2 pr-3">${fmtDate(j.Date)}</td>
+      <td class="py-2 pr-3">${esc(j.CustomerName)}</td><td class="py-2 pr-3">${esc(j.Phone)}</td>
+      <td class="py-2 pr-3">${esc(j.DeviceType)}</td><td class="py-2 pr-3">${statusBadge(j.Status)}</td>
+      <td class="py-2 pr-3 text-right">${fmtMoney(j.EstCharges)}</td><td class="py-2 pr-3 text-right">${fmtMoney(j.Advance)}</td>
+      <td class="py-2 pr-3 text-right">${fmtMoney(j.AtDelivery)}</td><td class="py-2 pr-3 text-right font-semibold">${fmtMoney(j.Balance)}</td>
+    </tr>`).join('') || '<tr><td colspan="10" class="py-8 text-center text-slate-400">No records in this range.</td></tr>';
+  const sum = k => list.reduce((s, j) => s + (parseFloat(j[k]) || 0), 0);
+  $('rep-summary').innerHTML = [
+    ['Jobs', list.length], ['Est. total', fmtMoney(sum('EstCharges'))],
+    ['Advance collected', fmtMoney(sum('Advance'))], ['At delivery', fmtMoney(sum('AtDelivery'))],
+    ['Balance outstanding', fmtMoney(sum('Balance'))],
+    ['Payments in range', fmtMoney(payments.filter(p => { const d = dayStr(p.Date); return (!from || d >= from) && (!to || d <= to); }).reduce((s, p) => s + (parseFloat(p.Amount) || 0), 0))]
+  ].map(([l, v]) => `<div class="card p-3"><p class="text-xs text-slate-500 uppercase font-semibold">${l}</p><p class="text-lg font-extrabold">${v}</p></div>`).join('');
+  $('rep-tbody').dataset.export = JSON.stringify(list.map(j => ({
+    'Job #': j.JobNo, 'Date': fmtDate(j.Date), 'Customer': j.CustomerName, 'Phone': j.Phone, 'Phone 2': j.Phone2 || '',
+    'CNIC': j.CNIC || '', 'Device': j.DeviceType, 'Brand/Model': j.BrandModel || '', 'Serial': j.SerialNo || '',
+    'Fault': j.Fault || '', 'Accessories': j.Accessories || '', 'Est Charges': j.EstCharges || 0,
+    'Advance': j.Advance || 0, 'At Delivery': j.AtDelivery || 0, 'Balance': j.Balance || 0,
+    'Status': j.Status, 'Technician': j.Technician || '', 'Received By': j.ReceivedBy || '',
+    'Expected': fmtDate(j.ExpectedDate), 'Ready': fmtDT(j.ReadyDate), 'Delivered': fmtDT(j.DeliveredDate),
+    'Proof': j.DeliveryProof || '', 'Notes': j.Notes || ''
+  })));
+}
+$('rep-export').addEventListener('click', () => {
+  const raw = $('rep-tbody').dataset.export;
+  if (!raw) { showToast('Run the report first', 'error'); return; }
+  const rows = JSON.parse(raw);
+  if (!rows.length) { showToast('Nothing to export', 'error'); return; }
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'JobCards');
+  XLSX.writeFile(wb, 'RepairShop_Report_' + todayStr() + '.xlsx');
+  showToast('Report exported');
+});
+
+/* ================= SETTINGS ================= */
+function renderSettings() {
+  const isAdmin = currentUser.role === 'admin';
+  $('set-shopname').value = settings.ShopName || '';
+  $('set-address').value = settings.Address || '';
+  $('set-phone1').value = settings.Phone1 || '';
+  $('set-phone2').value = settings.Phone2 || '';
+  $('set-services').value = settings.Services || '';
+  $('set-currency').value = settings.Currency || 'Rs ';
+  $('set-jobprefix').value = settings.JobPrefix || 'EE-';
+  ['set-shopname','set-address','set-phone1','set-phone2','set-services','set-currency','set-jobprefix','set-save'].forEach(id => $(id).disabled = !isAdmin);
+  $('set-note').textContent = isAdmin ? 'Only admins can change settings. Next job # is managed automatically.' : 'Only admins can change settings.';
+  $('users-list').innerHTML = users.map(u => `
+    <div class="flex items-center justify-between bg-slate-50 border rounded-lg px-3 py-2 text-sm">
+      <span><b>${esc(u.Username)}</b> · ${esc(u.Name || '')} <span class="text-xs text-slate-500">(${esc(u.Role)})</span></span>
+      ${isAdmin && u.Username !== currentUser.username ? `<button class="btn-ghost !py-1 text-xs" onclick="toggleUser('${esc(u.Username)}')">Disable/Enable</button>` : ''}
+    </div>`).join('');
+  $('adduser-form').style.display = isAdmin ? '' : 'none';
+}
+$('set-save').addEventListener('click', async () => {
+  try {
+    const data = await apiPost({ action: 'saveSettings', settings: {
+      ShopName: $('set-shopname').value.trim(), Address: $('set-address').value.trim(),
+      Phone1: $('set-phone1').value.trim(), Phone2: $('set-phone2').value.trim(),
+      Services: $('set-services').value.trim(), Currency: $('set-currency').value.trim(),
+      JobPrefix: $('set-jobprefix').value.trim()
+    }});
+    if (data.status !== 'success') throw new Error(data.message);
+    await loadData(); showToast('Settings saved');
+  } catch (e) { showToast(e.message, 'error'); }
+});
+$('nu-add').addEventListener('click', async () => {
+  try {
+    const data = await apiPost({ action: 'addUser', username: $('nu-username').value.trim(), password: $('nu-password').value, name: $('nu-name').value.trim(), role: $('nu-role').value });
+    if (data.status !== 'success') throw new Error(data.message);
+    ['nu-username','nu-password','nu-name'].forEach(id => $(id).value = '');
+    await loadData(); renderSettings(); showToast('User added');
+  } catch (e) { showToast(e.message, 'error'); }
+});
+async function toggleUser(username) {
+  try {
+    const data = await apiPost({ action: 'toggleUser', username });
+    if (data.status !== 'success') throw new Error(data.message);
+    await loadData(); renderSettings(); showToast('User updated');
+  } catch (e) { showToast(e.message, 'error'); }
+}
+</script>
+</body>
+</html>
